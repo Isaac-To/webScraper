@@ -5,18 +5,18 @@ import bs4
 
 RE_ROBOTS = re.compile(r"([A-Za-z0-9-]+): (.+)")
 
-async def requests(url):
+async def _requests(url):
     headers = {"User-Agent": "Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.9 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"}
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers) as response:
             return await response.text()
 
-async def get_robots_txt(src):
+async def _get_robots_txt(src):
     # print(f"Getting robots.txt for {src}")
     url = f"{src}/robots.txt"
-    return await requests(url)
+    return await _requests(url)
 
-async def parse_robots_txt(robots_txt):
+async def _parse_robots_txt(robots_txt):
     # print(f"Parsing robots.txt")
     categories = {}
     for line in robots_txt.split("\n"):
@@ -28,7 +28,7 @@ async def parse_robots_txt(robots_txt):
             categories[category].append(value)
     return categories
 
-async def re_not_permitted(category):
+async def _re_not_permitted(category):
     RE_SPECIALS = re.compile(r"([.+?])")
     RE_ASKTERISK = re.compile(r"([*])")
     disallowed = ["(" + RE_ASKTERISK.sub(".*", RE_SPECIALS.sub(r"\\\g<1>", x)) + ")" for x in category.get("Disallow", [])]
@@ -38,15 +38,15 @@ async def re_not_permitted(category):
     # print(f"Generated regex: {combined_re}")
     return re.compile(combined_re)
 
-async def get_links_from_sitemap(sitemap, not_allowed):
+async def _get_links_from_sitemap(sitemap, not_allowed):
     # print(f"Getting links from sitemap {sitemap}")
-    sitemap = await requests(sitemap)
+    sitemap = await _requests(sitemap)
     soup = bs4.BeautifulSoup(sitemap, "xml")
     sitemaps = soup.find_all("sitemap")
     sitemap_tasks = []
     for sitemap in sitemaps:
         for loc in sitemap.find_all("loc"):
-            sitemap_tasks.append(asyncio.create_task(get_links_from_sitemap(loc.text, not_allowed)))
+            sitemap_tasks.append(asyncio.create_task(_get_links_from_sitemap(loc.text, not_allowed)))
     links = await asyncio.gather(*sitemap_tasks)
     links = {link for sublist in links for link in sublist}
     urls = soup.find_all("url")
@@ -58,9 +58,11 @@ async def get_links_from_sitemap(sitemap, not_allowed):
 
 async def scrape(src):
     # print(f"Scraping {src}")
-    robots_txt = await get_robots_txt(src)
-    categories = await parse_robots_txt(robots_txt)
-    not_allowed = await re_not_permitted(categories)
+    robots_txt = await _get_robots_txt(src)
+    categories = await _parse_robots_txt(robots_txt)
+    not_allowed = await _re_not_permitted(categories)
+    sitemap_tasks = []
     for sitemap in categories.get("Sitemap"):
-        links = await get_links_from_sitemap(sitemap, not_allowed)
-        print(links)
+        sitemap_tasks.append(asyncio.create_task(_get_links_from_sitemap(sitemap, not_allowed)))
+    links = {link for sublist in await asyncio.gather(*sitemap_tasks) for link in sublist if not not_allowed.match(link)}
+    return links

@@ -1,1 +1,3 @@
 venv
+dist/*
+src/citrusti_webcrawler/__pycache__
