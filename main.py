@@ -12,12 +12,12 @@ async def requests(url):
             return await response.text()
 
 async def get_robots_txt(src):
-    print(f"Getting robots.txt for {src}")
+    # print(f"Getting robots.txt for {src}")
     url = f"{src}/robots.txt"
     return await requests(url)
 
 async def parse_robots_txt(robots_txt):
-    print(f"Parsing robots.txt")
+    # print(f"Parsing robots.txt")
     categories = {}
     for line in robots_txt.split("\n"):
         match = RE_ROBOTS.match(line)
@@ -29,18 +29,17 @@ async def parse_robots_txt(robots_txt):
     return categories
 
 async def re_not_permitted(category):
-    print(f"Generating permitted URLs for {src}")
     RE_SPECIALS = re.compile(r"([.+?])")
     RE_ASKTERISK = re.compile(r"([*])")
     disallowed = ["(" + RE_ASKTERISK.sub(".*", RE_SPECIALS.sub(r"\\\g<1>", x)) + ")" for x in category.get("Disallow", [])]
     allowed = ["(" + RE_ASKTERISK.sub(".*", RE_SPECIALS.sub(r"\\\g<1>", x)) + ")" for x in category.get("Allow", [])]
     combined_re = r"({0})|(?!({1}))".format("|".join(disallowed), "|".join(allowed))
     
-    print(f"Generated regex: {combined_re}")
+    # print(f"Generated regex: {combined_re}")
     return re.compile(combined_re)
 
 async def get_links_from_sitemap(sitemap, not_allowed):
-    print(f"Getting links from sitemap {sitemap}")
+    # print(f"Getting links from sitemap {sitemap}")
     sitemap = await requests(sitemap)
     soup = bs4.BeautifulSoup(sitemap, "xml")
     sitemaps = soup.find_all("sitemap")
@@ -58,7 +57,7 @@ async def get_links_from_sitemap(sitemap, not_allowed):
     return links
 
 async def scrape(src):
-    print(f"Scraping {src}")
+    # print(f"Scraping {src}")
     robots_txt = await get_robots_txt(src)
     categories = await parse_robots_txt(robots_txt)
     not_allowed = await re_not_permitted(categories)
